@@ -100,7 +100,23 @@ function conCopiaPost(lista) {
   return [...lista, ...copias];
 }
 
+// Verificación: confirma que el token y el ID responden y que Meta puede descargar los archivos del calendario. No publica nada.
+async function verificar() {
+  if (!IG_USER_ID || !TOKEN) throw new Error('Faltan los secretos IG_USER_ID e IG_PAGE_TOKEN');
+  const cuenta = await graph('GET', IG_USER_ID, { fields: 'username,name,followers_count,media_count' }, 1);
+  console.log(`Cuenta conectada: @${cuenta.username} (${cuenta.name || 'sin nombre'}) · ${cuenta.followers_count ?? '?'} seguidores · ${cuenta.media_count ?? '?'} publicaciones`);
+  const calendario = await leer('calendario.json', []);
+  let malos = 0;
+  for (const m of new Set(calendario.flatMap((p) => [].concat(p.media)).map(urlMedia))) {
+    const r = await fetch(m, { method: 'HEAD' }).catch(() => ({ ok: false, status: 'sin respuesta' }));
+    if (!r.ok) { malos++; console.error(`- No se puede descargar ${m} (${r.status})`); }
+  }
+  console.log(malos ? `${malos} archivo(s) con problema` : 'Todos los archivos del calendario se pueden descargar');
+  if (malos) process.exit(1);
+}
+
 async function main() {
+  if (process.env.VERIFICAR === '1') return verificar();
   const base = await leer('calendario.json', null);
   if (!Array.isArray(base)) throw new Error('calendario.json no existe o no es una lista');
   const calendario = conCopiaPost(base);
