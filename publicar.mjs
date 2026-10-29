@@ -103,8 +103,18 @@ function conCopiaPost(lista) {
 // Verificación: confirma que el token y el ID responden y que Meta puede descargar los archivos del calendario. No publica nada.
 async function verificar() {
   if (!IG_USER_ID || !TOKEN) throw new Error('Faltan los secretos IG_USER_ID e IG_PAGE_TOKEN');
-  const cuenta = await graph('GET', IG_USER_ID, { fields: 'username,name,followers_count,media_count' }, 1);
-  console.log(`Cuenta conectada: @${cuenta.username} (${cuenta.name || 'sin nombre'}) · ${cuenta.followers_count ?? '?'} seguidores · ${cuenta.media_count ?? '?'} publicaciones`);
+  const nodo = await graph('GET', IG_USER_ID, { fields: 'id,name' }, 1);
+  let cuenta;
+  try { cuenta = await graph('GET', IG_USER_ID, { fields: 'username,followers_count,media_count' }, 1); }
+  catch (e) {
+    // una página de Facebook no tiene media_count: el secreto quedó con el ID de la página
+    let igId = '';
+    try { igId = (await graph('GET', IG_USER_ID, { fields: 'instagram_business_account' }, 1)).instagram_business_account?.id || ''; } catch { /* no es página */ }
+    throw new Error(igId
+      ? `IG_USER_ID tiene el ID de la página de Facebook «${nodo.name}», no el de Instagram. Cambia el secreto IG_USER_ID por ${igId}`
+      : `IG_USER_ID (${nodo.name || nodo.id}) no es una cuenta de Instagram profesional: ${e.message}`);
+  }
+  console.log(`Cuenta conectada: @${cuenta.username} · ${cuenta.followers_count ?? '?'} seguidores · ${cuenta.media_count ?? '?'} publicaciones`);
   const calendario = await leer('calendario.json', []);
   let malos = 0;
   for (const m of new Set(calendario.flatMap((p) => [].concat(p.media)).map(urlMedia))) {
